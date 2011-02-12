@@ -1,0 +1,334 @@
+#!/bin/sh
+
+#    Copyright 1990, 1998, 2005, 2006 by Al Williams (alw@al-williams.com)
+#
+#   This file is part of Binds
+#    Binds is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    Binds is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with Binds; if not, write to the Free Software
+#    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+
+
+
+OPTSRC=N  # for now
+OPTHLP=N
+
+while getopts hs opt
+do case "$opt" in
+   h) OPTHLP=Y;;
+   s) OPTSRC=Y;;
+   [?]) OPTHLP=Y;;
+   esac
+done
+shift $((OPTIND-1))
+
+if [ $OPTHLP =  Y -o $# -lt 2  -o  "$1" = --help  ]
+then
+  echo Driver for scbind by Al Williams V1.1 >&2
+  echo This is free software, see COPYING for license >&2
+  echo Usage: $0 [-sh] script_name out_name [shell] [options] >&2
+  echo Transforms script script_name to executable out_name >&2
+  echo shell option is assumed to be /bin/sh if not specified >&2
+  echo        Default shell is taken from first line of script \(#! line\) >&2
+  echo        Default option is -i >&2
+  echo  use -h for help >&2
+  echo  use -s to retain .c source code for debugging scbinds >&2
+  exit 1
+fi
+if [ ! -f $1 ] 
+then
+  echo File $1 not found >&2
+  exit 2
+fi
+
+# add our exec path to find executable
+EDIR=`dirname $0`
+PATH="$PATH:$EDIR"
+OFILE=$2
+CFILE=`basename $1`
+
+if [ $# -lt 3 ]
+then
+  SHLINE=`head -n 1 $1`
+else
+  SHLINE="#!$3"
+fi
+if [ $# -lt 4  ]
+then
+  OPT=-i
+else
+  OPT="$4"
+fi  
+echo Binding $1 to $2 >&2
+if scbind $1 /tmp/$$$CFILE.c `basename $2` "$SHLINE" $OPT
+then
+  cat >>/tmp/$$$CFILE.c <<EOF
+// XSH.C The root part of the AWC Shell Script Compiler
+// Written in 1990 by Al Williams
+// Updated 1998 for Linux/ANSI
+
+#define DEBUG 0
+#define SUFFIX ".tmp"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <limits.h>
+
+int shpid;
+FILE *out;
+char pipename[32];
+extern char *name;
+extern char lines[];
+extern char *shell;
+extern char *opt;
+extern unsigned linesize;
+char linebuf[8192];
+char *decode(char *s, size_t len);
+
+// Called at death of child
+void atend(int notused)
+  {
+  int rc;
+  if (wait(&rc)==shpid) 
+    rc=(rc&0xFF00)>>8; 
+  else
+    return; 
+/* delete NSHPIPE */
+  unlink(pipename);
+  exit(rc);
+  }  
+
+
+// Look for a file along the path
+int search_path(char *cmd, char *res_path, int access_mode)
+{
+    char *cp;   /* used to scan PATH for directories */
+    int ret;      /* return value from access */
+    char *pathenv;
+    char tmppath[PATH_MAX];
+    char curpath[PATH_MAX];
+    char *path;
+    int lastpath;
+    int toolong=0;
+
+#if DEBUG
+printf("search_path: cmd = %s, access_mode = %d, fullpath = %d\n", cmd, access_mode, fullpath);
+#endif
+
+    /*
+     * full or relative path was given
+     */
+    if ( (cmd[0] == '/') || ( (cp=strchr(cmd, '/')) != NULL )) {  
+	if ( access(cmd, access_mode) == 0 ) {
+
+	    if ( cmd[0] != '/' ) { /* relative path */
+		if ( getcwd(curpath, PATH_MAX) == NULL ) {
+		    strcpy(res_path, curpath);
+		    return -1;
+		}
+		if ( (strlen(curpath) + strlen(cmd) + 1) > (size_t)PATH_MAX ) {
+		    sprintf(res_path, "cmd (as relative path) and cwd is longer than %d",
+			PATH_MAX);
+		    return -1;
+		}
+		sprintf(res_path, "%s/%s", curpath, cmd);
+	    }
+	    else
+	        strcpy(res_path, cmd);
+	    return 0;
+        }
+	else {
+	    sprintf(res_path, "file %s not found", cmd);
+	    return -1;
+	}
+    }
+
+    /* get the PATH variable */
+    if ( (pathenv=getenv("PATH")) == NULL) {
+        /* no path to scan, return */
+	sprintf(res_path, "Unable to get PATH env. variable");
+        return -1;
+    }
+
+    /*
+     * walk through each path in PATH. 
+     * Each path in PATH is placed in tmppath.  
+     * pathenv cannot be modified since it will affect PATH.
+     * If a signal came in while we have modified the PATH
+     * memory, we could create a problem for the caller.
+     */
+
+    curpath[0]='\0';
+
+    cp = pathenv;
+    path = pathenv;
+    lastpath = 0;
+    for (;;) {
+
+	if ( lastpath )
+	    break;
+
+	if ( cp != pathenv )
+	    path = ++cp;	 /* already set on first iteration */
+
+	/* find end of current path */
+
+	for (; ((*cp != ':') && (*cp != '\0')); cp++);
+
+	/*
+	 * copy path to tmppath so it can be NULL terminated
+	 * and so we do not modify path memory.
+	 */
+	strncpy(tmppath, path, (cp-path) );
+	tmppath[cp-path]='\0';
+#if DEBUG
+printf("search_path: tmppath = %s\n", tmppath);
+#endif
+
+	if ( *cp == '\0' )
+	    lastpath=1;		/* this is the last path entry */
+
+	/* Check lengths so not to overflow res_path */
+	if ( strlen(tmppath) + strlen(cmd) + 2 > (size_t)PATH_MAX ) {
+	    toolong++;
+	    continue;
+	}
+
+	sprintf(res_path, "%s/%s", tmppath, cmd);
+#if DEBUG
+printf("search_path: res_path = '%s'\n", res_path);
+#endif
+
+
+
+	if ( (ret=access(res_path, access_mode)) == 0 ) {
+#if DEBUG
+printf("search_path: found res_path = %s\n", res_path);
+#endif
+	    return 0;
+	}
+    }
+
+    /* return failure */
+    if ( toolong )
+        sprintf(res_path,
+	    "Unable to find file, %d path/file strings were too long", toolong);
+    else
+        strcpy(res_path, "Unable to find file");
+    return 1;	/* not found */
+}
+
+
+
+int main(int argc,char *argv[],char *envp[])
+  {
+  char *p;
+  char res_path[PATH_MAX];
+  // validate that we can find the shell
+  if (search_path(shell,res_path,X_OK))
+    {
+      fprintf(stderr,"%s: %s\n", name, res_path);
+      exit(127);
+    }
+#if DEBUG
+  else
+    printf("Found executable %s\n",res_path);
+#endif
+  sprintf(pipename,".NSHPIPE%d%s",getpid(),SUFFIX);
+  mknod(pipename,S_IFIFO|0666,0);  
+  signal(SIGCHLD,atend);
+  signal(SIGTERM,SIG_IGN);
+  signal(SIGINT,SIG_IGN);
+  signal(SIGHUP,SIG_IGN);
+  signal(SIGQUIT,SIG_IGN);
+  if (!(shpid=fork()))
+   {
+   char **newargv;
+   int i,o=1;
+   newargv=(char **)malloc((argc+3)*sizeof(char *));
+   if (!newargv) { strcpy(linebuf,name); strcat(linebuf," (1)"); perror(linebuf); exit(127); }
+   newargv[0]=shell;
+   if (opt) newargv[o++]=opt;
+   newargv[o]=pipename;
+   for (i=1;i<argc;i++) newargv[i+o]=argv[i];
+   newargv[i+o]=NULL;
+#if DEBUG
+   fprintf(stderr,"Exec: %s\n", shell);
+   i=0;
+   while (newargv[i]) { fprintf(stderr,"argv[%d]=%s\n", i, newargv[i]); i++;}
+#endif
+   execve(shell,newargv,envp);
+/* should not get here */
+   strcpy(linebuf,name);
+   strcat(linebuf," (2)");
+   perror(linebuf); 
+   exit(127);
+   }
+  out=fopen(pipename,"w");
+  if (!out) { strcpy(linebuf,name); strcat(linebuf," (3)"); perror(linebuf); exit(127); } else
+    {
+    unsigned char *lp=lines;
+    while (linesize>0)
+      {
+	unsigned llen=(*lp++)*256;
+	llen+=(*lp++);
+        fprintf(out,"%s\n",decode(lp,llen));
+        fflush(out);
+	lp+=llen;
+	linesize-=llen+2;
+      }
+#if EXIT    // This is the old way to close the script
+            // which is fine for shell, but not for other non-shells
+    fprintf(out,"exit\n");
+    fflush(out);
+#endif
+    fclose(out);
+    }
+  pause();  /* wait for SIGCLD */
+  // This just keeps the complier happy. Actually, at SIGCLD
+  // the atend handler returns the exit code of the child
+  return 0;  
+}
+
+char *decode(char *s, size_t len)
+   {
+// don't use memfrob in case target doesn't have it
+  char *s0=s;
+  while (len--) {
+    *s=*s^0x2A;
+    s++;
+  }
+  return s0;
+//    memfrob(s,len);
+//    return s;
+   }
+
+
+
+EOF
+  echo Compiling... >&2
+  cc -o $2 /tmp/$$$CFILE.c 
+  rv=$?
+fi
+if [ $OPTSRC = "Y" ]
+then
+  mv /tmp/$$$CFILE.c $2.c  
+else
+  rm /tmp/$$$CFILE.c 2>&1 >/dev/null
+fi
+exit $rv
+
+

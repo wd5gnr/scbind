@@ -1,0 +1,25 @@
+all : awkdemo awktest perldemo perltest hilo
+
+# awk wrapped in sh
+awkdemo : awkdemo.sh
+	../binds awkdemo.sh awkdemo /bin/bash
+
+# awk without bash
+awktest : awktest.sh
+	../binds awktest.sh awktest /usr/bin/awk -f
+
+# perl wrapped in sh
+perldemo : perldemo.sh
+	../binds perldemo.sh perldemo /bin/bash
+
+# perl without sh
+perltest : perltest.sh
+	../binds perltest.sh perltest /usr/bin/perl --
+
+# Ordinary script
+hilo : hilo.sh
+	../binds hilo.sh hilo
+
+clean :
+	rm -f awkdemo awktest hilo 
+	rm -f perldemo perltest 

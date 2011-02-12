@@ -1,0 +1,11 @@
+AC_INIT(scbind.c)
+AM_INIT_AUTOMAKE(scbind,1.1)
+AM_CONFIG_HEADER(config.h:config.in)
+AC_PROG_CC
+AC_CHECK_HEADERS([limits.h stdlib.h string.h unistd.h])
+AC_TYPE_SIZE_T
+AC_FUNC_ERROR_AT_LINE
+AC_FUNC_FORK
+AC_FUNC_MALLOC
+AC_CHECK_FUNCS([getcwd strchr memfrob])
+

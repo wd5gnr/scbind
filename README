@@ -1,0 +1,106 @@
+SCBIND - A "compiler" for shell scripts, by Al Williams (alw@al-williams.com).
+
+V1.1 12 Sept 2010 Release
+
+See ChangeLog
+
+This is a little program I wrote some years ago that allows you to "compile"
+shell scripts. Well, OK, you don't really compile them. The way the program
+works is that it creates and compiles a C program with your script scrambled
+up inside. When you run the program, it runs the shell of your choice, and
+calls it, feeding it input from a named pipe. This allows the program to
+feed commands to the shell, while the shell's stdin is still the terminal 
+(or wherever you think it is).
+
+What You Need
+=============
+A shell, a C compiler (preferable gcc), and some basic commands
+
+INSTALLATION
+============
+See INSTALL
+
+If you manually install:
+The binds script and scbind executable should both be on your path, 
+although if scbind is in the same directory as binds, it will be found, 
+even if it is not on the path.
+
+
+Easy Start
+==========
+Start with your favorite shell script. If it doesn't use /bin/sh, make
+ sure it has a #! line as line #1 (for example, #!/bin/bash). 
+Suppose the script's name is hilo.sh (one of the examples included).
+Then you enter:
+
+   binds hilo.sh hilo
+
+This creates an executable named hilo. Run that executable, and the 
+script runs! If you cat the executable (or use strings or otherwise
+examine the contents of the executable), you won't be able to easily 
+discern the script command, or even that it is a script!
+
+More Involved Use
+=================
+The binds shell script takes two optional arguments. First, you can
+override the name of the shell. The second argument allows you to
+set an option passed to the shell (defaults to -i).
+
+If you don't supply these arguments, the script uses the first line
+of the file for the shell name (striping the #! part). 
+If that doesn't appear correct, the program uses /bin/sh.
+
+If you don't provide an option, the program automatically uses -i. For most
+shells, this permits them to respond to signals even though they think they
+are not interactive. If you use '' for the option, at least on bash, you
+will disable ^C and other signal handling (which might be a feature).
+
+Note that the encoding and decoding is not cryptographic. It simply
+scrambles the text and would be easily broken. Of course, you can
+rewrite encode.c and recompile. The decode function is built into the
+binds script.
+
+More Details
+============
+The actual program doing the work is scbind. This program takes
+the input file name, the output file name, the name of the program
+(for error reporting in the resulting program), the name of the shell
+(must include the #!), and a shell option argument (which is nothing if 
+omitted). Using scbind, you can make custom scripts like binds to
+handle any special case you want. Then you can compile them!
+
+If you use scbind directly, remember that you must include #! with the
+shell name. Also, if you include #! on the command line, you probably 
+have to escape it, as in:
+
+   scbind hilo.sh hilo.c hilo \#\!/bin/bash -i
+
+There are several new examples that show how to wrap other scripting
+languages using shell scripts and here documents in the examples directory. 
+Using the shell wrapper allows the shell to keep handling signals, etc. 
+You can also use other programs as "shells" (for example, Perl or Awk) 
+but your results may vary. The examples included show several ways
+to accomplish this.
+
+
+MISC
+====
+* This Software is distributed under the GPL (see file COPYING).
+
+Who is Al Williams?
+===================
+If you work with Windows, you might know some of my books or magazine
+columns. I was the C++ columnist for Visual Developer (formerly 
+PC Techniques), the Java columnist for Web Techniques, and the former
+20/20 columnist for the defunct Dr. Dobb's Sourcebook. Currently I blog
+about embedded systems for Dr. Dobb's.
+
+My books include MFC 5 Black Book, Developing ActiveX Web Controls, 
+DOS And Windows Protected Mode, and DOS 5: A Developer's Guide. Note,
+however, that I am not Al Stevens, another DDJ author.
+
+http://www.al-williams.com
+
+
+
+

@@ -1,0 +1,7 @@
+1) Would be nice to have a man page (hint, hint)
+
+
+2) Note that kmdr won't work because --stdin is broken (checks extension)
+
+3) One problem is that if the shell fails, to start the other side of the
+fork waits forever. 

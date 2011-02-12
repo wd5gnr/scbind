@@ -1,0 +1,5 @@
+12 Sept 2010 - Two minor issues. First, the makefile tries to compile the examples which will fail if you haven't installed SCBIND already! So I switched it to where you have to manually make it. Second, it was pointed out to me that continuation lines (ending with \) cause failures. The new code will join such lines together into a single line. Note that you still have an 8K limit on a single line and this now applies to continued lines (in other words, you could have 4 2K lines but not 5). Also, you COULD increase the buffer, but for design reasons it will still have to be 64K or less without major surgery. Neither of these changes affects the generated code so if your scripts compiled you should be fine.
+
+	
+5 Sept 2010 - A long overdue update. There was a serious but rarely observed bug in v 1.0's encoders and decoders. If you happened to sync with the "key" you got a NULL byte and everything would break. That's been fixed along with using memfrob for encoding and decoding if available. The current version doesn't allow you to easily change the encoding and decoding, but does work better with non-shell scripts.
+	
